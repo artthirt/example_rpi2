@@ -3,6 +3,7 @@
 #include <QUdpSocket>
 #include <QDataStream>
 #include <QTimer>
+#include <QDebug>
 
 using namespace send_data;
 
@@ -74,16 +75,19 @@ void SendData::on_readyRead()
 
 void SendData::on_timeout()
 {
-	if(!m_send_start)
+	if(!m_send_start || !m_socket || m_host_sender.isNull() || !m_port_sender)
 		return;
 
 	if(m_data_send.size()){
 
 		QByteArray data;
 		QDataStream stream(&data, QIODevice::WriteOnly);
+		stream.setByteOrder(QDataStream::BigEndian);
+		stream.setFloatingPointPrecision(QDataStream::SinglePrecision);
+		stream.setVersion(QDataStream::Qt_5_3);
 		StructTelemetry& st = m_data_send[0];
 		stream << st.power_on;
-		FOREACH(i, cnt_engines, stream << st.power);
+		FOREACH(i, cnt_engines, stream << st.power[i]);
 		stream << st.tangaj;
 		stream << st.bank;
 		stream << st.course;
@@ -95,6 +99,8 @@ void SendData::on_timeout()
 		stream << st.accel.x();
 		stream << st.accel.y();
 		stream << st.accel.z();
+
+		m_socket->writeDatagram(data, m_host_sender, m_port_sender);
 
 		m_data_send.pop_front();
 	}
@@ -127,10 +133,12 @@ void SendData::tryParseData(const QByteArray &data, const QHostAddress &host, us
 		m_host_sender = host;
 		m_port_sender = port;
 		m_send_start = true;
+		qDebug() << "start send to socket" << host << port;
 	}
 	if(data == "STOP"){
 		m_send_start = false;
 		m_data_send.clear();
+		qDebug() << "stop send";
 	}
 }
 

@@ -10,9 +10,9 @@
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
-#include <pthread.h>
+#include <QCoreApplication>
 
-#include "senddata.h"
+#include "worki2c.h"
 
 using namespace std;
 
@@ -201,8 +201,8 @@ int example_i2c()
 
 	std::cout << "handle opened device " << i2ch << endl;
 
-	send_data::SendData* m_sendThread = new send_data::SendData;
-	m_sendThread->start();
+//	send_data::SendData* m_sendThread = new send_data::SendData;
+//	m_sendThread->start();
 
 	char txbuf[32] = {0};
 	char rxbuf[32] = {0};
@@ -238,14 +238,16 @@ int example_i2c()
 //	std::cout << "data file result open: " << fcsv << endl;
 	float data[7];
 
-	const float del_gyro = 1.f / 3000.f;
-	const float del_accel = 1.f / 20000.f;
+//	const float del_gyro = 1.f / 3000.f;
+//	const float del_accel = 1.f / 20000.f;
 
-	for(int i = 0; i < 1000; i++){
+	cout << "data begin\n";
+
+	for(;;){
 		txbuf[0] = 0x3b;
 		res = write(i2ch, txbuf, 1);
 
-		std::stringstream ss;
+		//std::stringstream ss;
 		for(int i = 0; i < 7/*data_out.size()*/; i++){
 			short val = 0;
 			txbuf[0] = 0x3b + 2 * i;
@@ -257,20 +259,20 @@ int example_i2c()
 			res = write(i2ch, txbuf, 1);
 			res = read(i2ch, rxbuf, 1);
 			val |= rxbuf[0];
-			ss << (int)val << "; ";
+			//ss << (int)val << "; ";
 			data[i] = val;
 		}
-		cout << ss.str() << endl;
+		//cout << ss.str() << endl;
 
-		m_sendThread->push_data(Vector3f(data[4], data[5], data[6]) * del_gyro,
-				Vector3f(data[0], data[1], data[2]) * del_accel,
-				data[3] / 340.f * 36.53f);
+//		m_sendThread->push_data(Vector3f(data[4], data[5], data[6]) * del_gyro,
+//				Vector3f(data[0], data[1], data[2]) * del_accel,
+//				data[3] / 340.f * 36.53f);
 
 //		std::string line = ss.str() + "\n";
 
 //		res = fputs(line.c_str(), fcsv);
 		//res = fwrite(line.c_str(), line.size(), fcsv);
-		std::cout << "result write to file: " << res << endl;
+		//std::cout << "result read from i2c: " << res << endl;
 
 		delay(100);
 	}
@@ -279,7 +281,9 @@ int example_i2c()
 
 //	fclose(fcsv);
 
-	std::cout << "end\n";
+	std::cout << "data end\n";
+
+//	delete m_sendThread;
 
 	return 0;
 
@@ -287,9 +291,14 @@ int example_i2c()
 
 ///////////////////////////
 
-int main()
+int main(int argc, char *argv[])
 {
-	return example_i2c();
+//	return example_i2c();
+	QCoreApplication app(argc, argv);
+
+	WorkI2C work;
+
+	app.exec();
 
 	return 0;
 }
