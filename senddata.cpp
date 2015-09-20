@@ -43,7 +43,7 @@ void SendData::set_port_receiver(ushort port)
 
 }
 
-void SendData::push_data(const Vector3f &gyroscope, const Vector3f &accelerometer, float temp)
+void SendData::push_data(const Vertex3i &gyroscope, const Vertex3i &accelerometer, float temp)
 {
 	if(!m_send_start)
 		return;

@@ -9,8 +9,6 @@
 #include <stdio.h>
 
 const int gaddr = 0x68;
-const float del_gyro = 1.f / 200.f;
-const float del_accel = 1.f / 2000.f;
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
   , m_i2cdev(0)
@@ -77,14 +75,11 @@ void WorkI2C::on_timeout()
 		data[i] = val;
 	}
 
-	FOREACH(i, 3, data[i] >>= 4);
-	FOREACH(i, 3, data[4 + i] >>= 6);
-
 	//std::cout << ss.str() << std::endl;
 
 	if(m_sendData){
-		m_sendData->push_data(Vector3f(data[4], data[5], data[6]) * del_gyro,
-				Vector3f(data[0], data[1], data[2]) * del_accel,
+		m_sendData->push_data(Vertex3i(data[4], data[5], data[6]),
+				Vertex3i(data[0], data[1], data[2]),
 				data[3] / 340.f * 36.53f);
 	}
 }

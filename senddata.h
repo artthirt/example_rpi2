@@ -26,7 +26,7 @@ public:
 
 	void setDelay(int delay);
 	void set_port_receiver(ushort port);
-	void push_data(const Vector3f& gyroscope, const Vector3f& accelerometer, float temp);
+	void push_data(const Vertex3i& gyroscope, const Vertex3i& accelerometer, float temp);
 
 signals:
 	void send_set_interval(int);
