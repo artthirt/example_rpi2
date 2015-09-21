@@ -84,7 +84,7 @@ void SendData::on_timeout()
 		QDataStream stream(&data, QIODevice::WriteOnly);
 		stream.setByteOrder(QDataStream::BigEndian);
 		stream.setFloatingPointPrecision(QDataStream::SinglePrecision);
-		stream.setVersion(QDataStream::Qt_5_3);
+		stream.setVersion(QDataStream::Qt_4_8);
 		StructTelemetry& st = m_data_send[0];
 		stream << st.power_on;
 		FOREACH(i, cnt_engines, stream << st.power[i]);
