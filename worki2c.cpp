@@ -16,10 +16,11 @@ WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 	init();
 
 	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
-	m_timer.start(100);
+	m_timer.start(10);
 
 	m_sendData = new send_data::SendData;
 	m_sendData->start();
+	m_sendData->moveToThread(m_sendData);
 }
 
 WorkI2C::~WorkI2C()
