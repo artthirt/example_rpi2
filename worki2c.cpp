@@ -8,6 +8,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#include <QDebug>
+
 const int gaddr = 0x68;
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
@@ -58,25 +60,35 @@ void WorkI2C::on_timeout()
 
 	int res;
 
-	int data[7];
+	u_short data_in[7];
+	short data[7];
 
-	//std::stringstream ss;
+	txbuf[0] = 0x3b;
+	res = write(m_i2cdev, txbuf, 1);
+	res = read(m_i2cdev, data_in, 14);
+
+//	QString str;
 	for(int i = 0; i < 7/*data_out.size()*/; i++){
-		short val = 0;
-		txbuf[0] = 0x3b + 2 * i;
-		res = write(m_i2cdev, txbuf, 1);
-		res = read(m_i2cdev, rxbuf, 1);
-		val = (rxbuf[0] << 8);
-
-		txbuf[0] = 0x3b + 2 * i + 1;
-		res = write(m_i2cdev, txbuf, 1);
-		res = read(m_i2cdev, rxbuf, 1);
-		val |= rxbuf[0];
-		//ss << (int)val << "; ";
-		data[i] = val;
+		data[i] = static_cast<short>((data_in[i] << 8) | (data_in[i] >> 8));
+//		str += QString::number(data[i]) + "; ";
 	}
+//	for(int i = 0; i < 7/*data_out.size()*/; i++){
+//		short val = 0;
+//		txbuf[0] = 0x3b + 2 * i;
+//		res = write(m_i2cdev, txbuf, 1);
+//		res = read(m_i2cdev, rxbuf, 1);
+//		val = (rxbuf[0] << 8);
 
-	//std::cout << ss.str() << std::endl;
+//		txbuf[0] = 0x3b + 2 * i + 1;
+//		res = write(m_i2cdev, txbuf, 1);
+//		res = read(m_i2cdev, rxbuf, 1);
+//		val |= rxbuf[0];
+//		ss << (int)val << "; ";
+//		data[i] = val;
+//	}
+
+//	qDebug() << str;
+//	std::cout << ss.str() << std::endl;
 
 	if(m_sendData){
 		m_sendData->push_data(Vertex3i(data[4], data[5], data[6]),
