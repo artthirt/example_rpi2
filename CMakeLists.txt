@@ -13,7 +13,7 @@ set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-c++)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 
-include_directories(.)
+include_directories(. ./submodules/struct_controls)
 
 aux_source_directory(. SRC_LIST)
 add_executable(${PROJECT_NAME} ${SRC_LIST})

@@ -33,6 +33,16 @@ SendData::~SendData()
 	}
 }
 
+StructTelemetry SendData::config_params() const
+{
+	return m_config_params;
+}
+
+void SendData::set_config_params(const StructTelemetry &telem)
+{
+	m_config_params = telem;
+}
+
 void SendData::setDelay(int delay)
 {
 	emit send_set_interval(delay);
@@ -52,7 +62,7 @@ void SendData::push_data(const Vertex3i &gyroscope, const Vertex3i &acceleromete
 		m_data_send.pop_back();
 	}
 
-	StructTelemetry st;
+	StructTelemetry st = m_config_params;
 	st.gyro = gyroscope;
 	st.accel = accelerometer;
 	st.temp = temp;
@@ -82,23 +92,7 @@ void SendData::on_timeout()
 
 		QByteArray data;
 		QDataStream stream(&data, QIODevice::WriteOnly);
-		stream.setByteOrder(QDataStream::BigEndian);
-		stream.setFloatingPointPrecision(QDataStream::SinglePrecision);
-		stream.setVersion(QDataStream::Qt_4_8);
-		StructTelemetry& st = m_data_send[0];
-		stream << st.power_on;
-		FOREACH(i, cnt_engines, stream << st.power[i]);
-		stream << st.tangaj;
-		stream << st.bank;
-		stream << st.course;
-		stream << st.temp;
-		stream << st.height;
-		stream << st.gyro.x();
-		stream << st.gyro.y();
-		stream << st.gyro.z();
-		stream << st.accel.x();
-		stream << st.accel.y();
-		stream << st.accel.z();
+		m_data_send.front().write_to(stream);
 
 		m_socket->writeDatagram(data, m_host_sender, m_port_sender);
 

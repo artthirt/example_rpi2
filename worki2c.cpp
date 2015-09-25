@@ -2,61 +2,54 @@
 
 #include <sstream>
 #include <iostream>
-#include <linux/i2c.h>
-#include <linux/i2c-dev.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <stdio.h>
 
 #include <QDebug>
 
 const int gaddr = 0x68;
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
-  , m_i2cdev(0)
 {
-	init();
-
 	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
 	m_timer.start(10);
 
 	m_sendData = new send_data::SendData;
 	m_sendData->start();
 	m_sendData->moveToThread(m_sendData);
+
+	init();
 }
 
 WorkI2C::~WorkI2C()
 {
-	if(m_i2cdev){
-		close(m_i2cdev);
-	}
 }
 
 void WorkI2C::init()
 {
-	m_i2cdev = open("/dev/i2c-1", O_RDWR);
-	int res;
+	if(!m_i2cdev.open(0x68)){
+		std::cout << "device not open\n";
+		return;
+	}
+	std::cout << "device opened\n";
+	u_char data[2] = { 0 };
+	m_i2cdev.write(0x6B, data, 1);
 
-	res = ioctl(m_i2cdev, I2C_TENBIT, 0);
-	std::cout << "result set tenbit " << res << std::endl;
-	res = ioctl(m_i2cdev, I2C_SLAVE, gaddr);
-	std::cout << "result set slave bit " << res << std::endl;
+	if(m_sendData){
+		StructTelemetry telem;
 
-	uchar txbuf[2] = {0x6B, 0};
-	write(m_i2cdev, txbuf, 2);
+		m_i2cdev.read(0x0d, telem.raw, raw_count);
+		telem.afs_sel = (telem.raw[28] >> 3) & 0x03;
+		telem.fs_sel = (telem.raw[27] >> 3) & 0x03;
 
-	uchar rxbuf[2] = {0};
-	read(m_i2cdev, rxbuf, 1);
-	std::cout << "after write 0: " << (u_int)rxbuf << std::endl;
-
+		m_sendData->set_config_params(telem);
+	}
 }
 
 void WorkI2C::on_timeout()
 {
-	if(!m_i2cdev)
+	if(!m_i2cdev.is_opened())
 		return;
 
-	uchar rxbuf[10] = {0}, txbuf[10] = {0};
+	uchar txbuf[10] = {0};
 
 	int res;
 
@@ -64,8 +57,7 @@ void WorkI2C::on_timeout()
 	short data[7];
 
 	txbuf[0] = 0x3b;
-	res = write(m_i2cdev, txbuf, 1);
-	res = read(m_i2cdev, data_in, 14);
+	res = m_i2cdev.read(0x3b, reinterpret_cast<u_char *>(data_in), 14);
 
 //	QString str;
 	for(int i = 0; i < 7/*data_out.size()*/; i++){
@@ -93,7 +85,7 @@ void WorkI2C::on_timeout()
 	if(m_sendData){
 		m_sendData->push_data(Vertex3i(data[4], data[5], data[6]),
 				Vertex3i(data[0], data[1], data[2]),
-				data[3] / 340.f * 36.53f);
+				data[3] / 340.f + 36.53f);
 	}
 }
 
