@@ -39,6 +39,7 @@ void WorkI2C::init()
 		m_i2cdev.read(0x0d, telem.raw, raw_count);
 		telem.afs_sel = (telem.raw[28] >> 3) & 0x03;
 		telem.fs_sel = (telem.raw[27] >> 3) & 0x03;
+		telem.freq =  1000.0 / m_timer.interval();
 
 		m_sendData->set_config_params(telem);
 	}
