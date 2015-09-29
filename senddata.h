@@ -13,7 +13,7 @@ class QTimer;
 namespace send_data{
 
 const int max_send_buffer_count = 100;
-const int delay_timer = 10;
+const int delay_timer = 5;
 
 const ushort c_port_receiver_default = 7777;
 

@@ -10,7 +10,7 @@ const int gaddr = 0x68;
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 {
 	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
-	m_timer.start(10);
+	m_timer.start(5);
 
 	m_sendData = new send_data::SendData;
 	m_sendData->start();
@@ -21,6 +21,9 @@ WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 
 WorkI2C::~WorkI2C()
 {
+	if(m_sendData){
+		delete m_sendData;
+	}
 }
 
 void WorkI2C::init()
@@ -37,9 +40,26 @@ void WorkI2C::init()
 		StructTelemetry telem;
 
 		m_i2cdev.read(0x0d, telem.raw, raw_count);
-		telem.afs_sel = (telem.raw[28] >> 3) & 0x03;
-		telem.fs_sel = (telem.raw[27] >> 3) & 0x03;
-		telem.freq =  1000.0 / m_timer.interval();
+		telem.afs_sel = (telem.raw[28 - 0x0d] >> 3) & 0x03;
+		telem.fs_sel = (telem.raw[27 - 0x0d] >> 3) & 0x03;
+
+		uchar dlpf_cfg = telem.raw[26 - 0x0d] & 0x3;
+		int smplrt_div = telem.raw[25 - 0x0d];
+		int gyr_out_rate;
+
+		switch (dlpf_cfg) {
+			case 0:
+			case 7:
+				gyr_out_rate = 8000;
+				break;
+			default:
+				gyr_out_rate = 1000;
+				break;
+		}
+
+		double sample_rate_div = gyr_out_rate / (1 + smplrt_div);
+
+		telem.freq =  sample_rate_div;
 
 		m_sendData->set_config_params(telem);
 	}

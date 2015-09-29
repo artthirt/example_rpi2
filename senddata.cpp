@@ -90,13 +90,17 @@ void SendData::on_timeout()
 
 	if(m_data_send.size()){
 
-		QByteArray data;
-		QDataStream stream(&data, QIODevice::WriteOnly);
-		m_data_send.front().write_to(stream);
+		int max_count_send = 30, index = 0;
 
-		m_socket->writeDatagram(data, m_host_sender, m_port_sender);
+		while(m_data_send.size() && index++ < max_count_send){
+			QByteArray data;
+			QDataStream stream(&data, QIODevice::WriteOnly);
+			m_data_send.front().write_to(stream);
 
-		m_data_send.pop_front();
+			m_socket->writeDatagram(data, m_host_sender, m_port_sender);
+
+			m_data_send.pop_front();
+		}
 	}
 }
 
@@ -112,11 +116,13 @@ void SendData::run()
 	m_socket = new QUdpSocket;
 	m_socket->bind(m_port_receiver);
 	connect(m_socket, SIGNAL(readyRead()), this, SLOT(on_readyRead()));
+	m_socket->moveToThread(this);
 
 	m_timer = new QTimer;
 	connect(m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
 	connect(this, SIGNAL(send_set_interval(int)), this, SLOT(on_send_set_delay(int)), Qt::QueuedConnection);
 	m_timer->start(delay_timer);
+	m_timer->moveToThread(this);
 
 	exec();
 }
