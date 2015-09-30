@@ -12,6 +12,7 @@ SendData::SendData(QObject *parent)
 	, m_socket(0)
 	, m_timer(0)
 	, m_send_start(false)
+	, m_is_available_data(false)
 {
 	m_port_receiver = c_port_receiver_default;
 	m_port_sender = 0;
@@ -53,21 +54,22 @@ void SendData::set_port_receiver(ushort port)
 
 }
 
-void SendData::push_data(const Vertex3i &gyroscope, const Vertex3i &accelerometer, float temp)
+void SendData::push_data(const Vertex3i &gyroscope, const Vertex3i &accelerometer, float temp, qint64 time)
 {
 	if(!m_send_start)
 		return;
 
-	while(m_data_send.size() >= max_send_buffer_count){
-		m_data_send.pop_back();
-	}
 
 	StructTelemetry st = m_config_params;
 	st.gyro = gyroscope;
 	st.accel = accelerometer;
 	st.temp = temp;
+	st.tick = time;
 
-	m_data_send.push_back(st);
+	m_mutex.lock();
+	m_data_send = st;
+	m_is_available_data = true;
+	m_mutex.unlock();
 }
 
 void SendData::on_readyRead()
@@ -88,19 +90,16 @@ void SendData::on_timeout()
 	if(!m_send_start || !m_socket || m_host_sender.isNull() || !m_port_sender)
 		return;
 
-	if(m_data_send.size()){
+	if(m_is_available_data){
 
-		int max_count_send = 30, index = 0;
+		QByteArray data;
+		QDataStream stream(&data, QIODevice::WriteOnly);
+		m_mutex.lock();
+		m_data_send.write_to(stream);
+		m_is_available_data = false;
+		m_mutex.unlock();
 
-		while(m_data_send.size() && index++ < max_count_send){
-			QByteArray data;
-			QDataStream stream(&data, QIODevice::WriteOnly);
-			m_data_send.front().write_to(stream);
-
-			m_socket->writeDatagram(data, m_host_sender, m_port_sender);
-
-			m_data_send.pop_front();
-		}
+		m_socket->writeDatagram(data, m_host_sender, m_port_sender);
 	}
 }
 
@@ -132,12 +131,13 @@ void SendData::tryParseData(const QByteArray &data, const QHostAddress &host, us
 	if(data == "START"){
 		m_host_sender = host;
 		m_port_sender = port;
+		m_is_available_data = false;
 		m_send_start = true;
 		qDebug() << "start send to socket" << host << port;
 	}
 	if(data == "STOP"){
 		m_send_start = false;
-		m_data_send.clear();
+		m_is_available_data = false;
 		qDebug() << "stop send";
 	}
 }

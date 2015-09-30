@@ -4,6 +4,7 @@
 #include <QThread>
 #include <QHostAddress>
 #include <QVector>
+#include <QMutex>
 
 #include "struct_controls.h"
 
@@ -29,7 +30,7 @@ public:
 
 	void setDelay(int delay);
 	void set_port_receiver(ushort port);
-	void push_data(const Vertex3i& gyroscope, const Vertex3i& accelerometer, float temp);
+	void push_data(const Vertex3i& gyroscope, const Vertex3i& accelerometer, float temp, qint64 time);
 
 signals:
 	void send_set_interval(int);
@@ -43,14 +44,16 @@ protected:
 	void tryParseData(const QByteArray& data, const QHostAddress& host, ushort port);
 
 private:
+	QMutex m_mutex;
 	QTimer *m_timer;
 	QUdpSocket* m_socket;
 	ushort m_port_receiver;
 	ushort m_port_sender;
 	QHostAddress m_host_sender;
-	QVector< StructTelemetry > m_data_send;
+	StructTelemetry m_data_send;
 	StructTelemetry m_config_params;
 	bool m_send_start;
+	bool m_is_available_data;
 };
 
 }

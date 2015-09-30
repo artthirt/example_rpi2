@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include <QDebug>
+#include <QDateTime>
 
 const int gaddr = 0x68;
 
@@ -80,6 +81,8 @@ void WorkI2C::on_timeout()
 	txbuf[0] = 0x3b;
 	res = m_i2cdev.read(0x3b, reinterpret_cast<u_char *>(data_in), 14);
 
+	qint64 tick = QDateTime::currentMSecsSinceEpoch();
+
 //	QString str;
 	for(int i = 0; i < 7/*data_out.size()*/; i++){
 		data[i] = static_cast<short>((data_in[i] << 8) | (data_in[i] >> 8));
@@ -106,7 +109,7 @@ void WorkI2C::on_timeout()
 	if(m_sendData){
 		m_sendData->push_data(Vertex3i(data[4], data[5], data[6]),
 				Vertex3i(data[0], data[1], data[2]),
-				data[3] / 340.f + 36.53f);
+				data[3] / 340.f + 36.53f, tick);
 	}
 }
 
