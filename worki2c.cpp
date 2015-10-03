@@ -107,8 +107,8 @@ void WorkI2C::on_timeout()
 //	std::cout << ss.str() << std::endl;
 
 	if(m_sendData){
-		m_sendData->push_data(Vertex3i(data[4], data[5], data[6]),
-				Vertex3i(data[0], data[1], data[2]),
+		m_sendData->push_data(Vector3i(data[4], data[5], data[6]),
+				Vector3i(data[0], data[1], data[2]),
 				data[3] / 340.f + 36.53f, tick);
 	}
 }
