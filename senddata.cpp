@@ -6,6 +6,7 @@
 #include <QDebug>
 
 using namespace send_data;
+using namespace sc;
 
 SendData::SendData(QObject *parent)
 	:QThread(parent)

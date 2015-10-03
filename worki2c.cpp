@@ -8,6 +8,8 @@
 
 const int gaddr = 0x68;
 
+using namespace  sc;
+
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 {
 	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));

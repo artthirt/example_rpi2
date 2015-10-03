@@ -25,12 +25,12 @@ public:
 	SendData(QObject *parent = NULL);
 	virtual ~SendData();
 
-	StructTelemetry config_params() const;
-	void set_config_params(const StructTelemetry& telem);
+	sc::StructTelemetry config_params() const;
+	void set_config_params(const sc::StructTelemetry& telem);
 
 	void setDelay(int delay);
 	void set_port_receiver(ushort port);
-	void push_data(const Vector3i& gyroscope, const Vector3i& accelerometer, float temp, qint64 time);
+	void push_data(const sc::Vector3i& gyroscope, const sc::Vector3i& accelerometer, float temp, qint64 time);
 
 signals:
 	void send_set_interval(int);
@@ -50,8 +50,8 @@ private:
 	ushort m_port_receiver;
 	ushort m_port_sender;
 	QHostAddress m_host_sender;
-	StructTelemetry m_data_send;
-	StructTelemetry m_config_params;
+	sc::StructTelemetry m_data_send;
+	sc::StructTelemetry m_config_params;
 	bool m_send_start;
 	bool m_is_available_data;
 };
