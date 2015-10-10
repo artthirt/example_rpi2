@@ -7,6 +7,7 @@
 
 using namespace send_data;
 using namespace sc;
+using namespace vector3_;
 
 SendData::SendData(QObject *parent)
 	:QThread(parent)

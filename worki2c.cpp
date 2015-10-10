@@ -9,6 +9,7 @@
 const int gaddr = 0x68;
 
 using namespace  sc;
+using namespace vector3_;
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 {

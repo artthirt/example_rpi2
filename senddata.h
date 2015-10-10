@@ -30,7 +30,7 @@ public:
 
 	void setDelay(int delay);
 	void set_port_receiver(ushort port);
-	void push_data(const sc::Vector3i& gyroscope, const sc::Vector3i& accelerometer, float temp, qint64 time);
+	void push_data(const vector3_::Vector3i& gyroscope, const vector3_::Vector3i& accelerometer, float temp, qint64 time);
 
 signals:
 	void send_set_interval(int);
