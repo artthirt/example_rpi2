@@ -12,7 +12,11 @@
 
 #include <QCoreApplication>
 
+#include <QThreadPool>
+#include <gpiothread.h>
+
 #include "worki2c.h"
+#include "gpiowork.h"
 
 using namespace std;
 
@@ -25,140 +29,25 @@ void delay(int ms)
 
 namespace gpio{
 
-string gpio_export("/sys/class/gpio/export");
-string gpio_unexport("/sys/class/gpio/unexport");
-
-bool open_pin(int pin)
-{
-	ofstream file(gpio_export.c_str());
-
-	if(!file.is_open()){
-		cout << "pin " << pin << " not initialize" << endl;
-		return false;
-	}
-
-	file << pin;
-
-	file.close();
-	return true;
-}
-
-bool close_pin(int pin)
-{
-	ofstream file(gpio_unexport.c_str());
-
-	if(!file.is_open()){
-		cout << "pin " << pin << " not closed" << endl;
-		return false;
-	}
-
-	file << pin;
-
-	file.close();
-	return true;
-}
-
-template< typename T >
-bool write_to_file(string sfile, T value)
-{
-	stringstream ssv;
-
-	ofstream file(sfile.c_str());
-
-	if(!file.is_open()){
-		return false;
-	}
-
-	ssv << value;
-
-	file.write(ssv.str().c_str(), ssv.str().size());
-
-	file.close();
-
-	return true;
-
-}
-
-template < typename T >
-bool write_to_gpio_custom(int pin, string key, T value)
-{
-	stringstream ss;
-
-	ss << "/sys/class/gpio/gpio" << pin << "/" << key;
-
-	if(!write_to_file(ss.str(), value)){
-		cout << "not write to gpio pin " << pin << " for " << key << endl;
-		return false;
-	}
-
-	cout << "write to gpio pin " << pin << " for key " << key << " value " << value << endl;
-
-	return true;
-}
-
-bool write_to_pin(int pin, bool value)
-{
-	return write_to_gpio_custom(pin, "value", value);
-}
-
-int read_from_pin(int pin)
-{
-	stringstream ss;
-	stringstream ssv;
-
-	ss << "/sys/class/gpio/gpio" << pin << "/value";
-
-	ifstream file(ss.str().c_str());
-
-	if(!file.is_open()){
-		cout <<  "not readed pin" << endl;
-		return -1;
-	}
-
-	int value;
-
-	file >> value;
-
-	file.close();
-
-	return value;
-}
-
-enum DIRECTION{
-	D_IN = 0,
-	D_OUT = 1
-};
-
-bool direction_gpio(int pin, DIRECTION dir)
-{
-	switch (dir) {
-	case D_IN:
-		return write_to_gpio_custom(pin, "direction", "in");
-	case D_OUT:
-		return write_to_gpio_custom(pin, "direction", "out");
-	default:
-		break;
-	}
-	return false;
-}
-
 }
 
 int example_gpio()
 {
 	const int pin_fan = 14;
 
+	gpio::GPIOWork work;
+
 	cout << "Hello World!" << endl;
 
-	if(!gpio::open_pin(pin_fan)){
+	if(!work.open_pin(pin_fan)){
 		return 1;
 	}
 
-	if(!gpio::direction_gpio(pin_fan, gpio::D_OUT)){
+	if(!work.set_direction_gpio(pin_fan, gpio::GPIOWork::D_OUT)){
 		return 2;
 	}
 
-	if(!gpio::write_to_pin(pin_fan, 1)){
+	if(!work.write_to_pin(pin_fan, 1)){
 		return 3;
 	}
 
@@ -172,7 +61,7 @@ int example_gpio()
 	bool ff = false;
 	int one = 0, zero = 0;
 	for(int i = 0; i < 10000; i++){
-		int val = gpio::read_from_pin(pin_fan);
+		int val = work.read_from_pin(pin_fan);
 		val == 0? ++zero : ++one;
 		cout << (double) one / max(1.0, (double)(zero + one)) << "|  v1=" << one << " v0="<< zero << endl;
 		delay(1);
@@ -181,7 +70,7 @@ int example_gpio()
 
 	cout << "stop delay" << endl;
 
-	if(!gpio::close_pin(pin_fan)){
+	if(!work.close_pin(pin_fan)){
 		return 4;
 	}
 }
@@ -297,6 +186,29 @@ int main(int argc, char *argv[])
 	QCoreApplication app(argc, argv);
 
 	WorkI2C work;
+
+	GPIOThread *thread = new GPIOThread;
+
+	QThreadPool::globalInstance()->start(thread);
+
+
+	QString sval = "1.5";
+	QString sfreq = "50";
+	if(argc > 1){
+		sval= argv[1];
+	}
+	if(argc > 2){
+		sfreq = argv[2];
+	}
+	std::cout << "impulse = " << sval.toStdString() << "; freq = " << sfreq.toStdString() << "\n";
+
+	float freq = sfreq.toFloat();
+	if(!freq)
+		freq = 50;
+
+	float delay_one = sval.toFloat();
+	float delay_hz = 1000./freq;
+	thread->open_pin(15, delay_one, delay_hz - delay_one);
 
 	app.exec();
 
