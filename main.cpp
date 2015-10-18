@@ -17,6 +17,7 @@
 
 #include "worki2c.h"
 #include "gpiowork.h"
+#include "senddata.h"
 
 using namespace std;
 
@@ -188,6 +189,12 @@ int main(int argc, char *argv[])
 	WorkI2C work;
 
 	GPIOThread *thread = new GPIOThread;
+	send_data::SendData *sender = new send_data::SendData;
+	sender->moveToThread(sender);
+	sender->start();
+
+	work.set_senser(sender);
+	thread->set_sender(sender);
 
 	QThreadPool::globalInstance()->start(thread);
 
@@ -207,8 +214,7 @@ int main(int argc, char *argv[])
 		freq = 50;
 
 	float delay_one = sval.toFloat();
-	float delay_hz = 1000./freq;
-	thread->open_pin(15, delay_one, delay_hz - delay_one);
+	thread->open_pin(15, delay_one, freq);
 
 	app.exec();
 

@@ -4,9 +4,12 @@
 #include <QObject>
 #include <QTimer>
 
-#include "senddata.h"
 #include "struct_controls.h"
 #include "i2cdevice.h"
+
+namespace send_data{
+class SendData;
+}
 
 class WorkI2C : public QObject
 {
@@ -14,6 +17,8 @@ class WorkI2C : public QObject
 public:
 	explicit WorkI2C(QObject *parent = 0);
 	virtual ~WorkI2C();
+
+	void set_senser(send_data::SendData* sender);
 
 	void init();
 

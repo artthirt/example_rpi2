@@ -3,9 +3,57 @@
 
 #include <QRunnable>
 #include <QElapsedTimer>
+#include <QTime>
 #include <QMap>
 
 #include "gpiowork.h"
+#include "struct_controls.h"
+
+namespace send_data{
+class SendData;
+}
+
+//////////////////////////////////////////
+
+struct Pin{
+	enum CASE{
+		ONE = 0,
+		ZERO
+	};
+
+	Pin();
+	Pin(uint impulse, uint period, int pin);
+
+	qint64 case_delay();
+	int cur_value();
+	void swap_case();
+	bool set_new_impulse(uint impulse);
+	float current_angle() const;
+	float desired_angle() const;
+	void set_desired_impulse(float angle);
+	void calculate_params();
+	int get_impulse_from_time();
+	bool is_desired_made();
+
+	uint impulse;
+	uint desired_impulse;
+	uint past_impulse;
+	uint period;
+	uint speed_of_change;
+	uint timework_ms;
+	uint time_start_ms;
+	int pin;
+	bool opened;
+
+	QTime time_watch;
+
+	CASE cur_case;
+	qint64 last_time;
+	int past_time;
+	int delta_time;
+};
+
+//////////////////////////////////////////
 
 class GPIOThread : public QRunnable
 {
@@ -13,82 +61,20 @@ public:
 	GPIOThread();
 	~GPIOThread();
 
-	bool open_pin(int pin, float delay_one, float delay_zero);
+	bool open_pin(int pin, float impulse, float freq_meandr);
 	void close_pin(int pin);
 	/**
 	 * @brief set_delay
 	 * @param delay - delay in ms
 	 */
-	void set_delay(float delay);
-	void set_frequency(uint freq);
+	void set_sender(send_data::SendData* sender);
 protected:
 	virtual void run();
 
 private:
-	struct Pin{
-		enum CASE{
-			ONE = 0,
-			ZERO
-		};
-
-		Pin(){
-			pin = 0;
-			delay_one = 0;
-			delay_zero = 0;
-			cur_case = ONE;
-			last_time = 0;
-		}
-		Pin(uint delay_one, uint delay_zero, int pin){
-			this->cur_case = ONE;
-			this->last_time = 0;
-			this->pin = pin;
-			this->delay_one = delay_one;
-			this->delay_zero = delay_zero;
-		}
-		uint delay_one;
-		uint delay_zero;
-		int pin;
-
-		CASE cur_case;
-		qint64 last_time;
-
-		qint64 case_delay(){
-			switch (cur_case) {
-				case ONE:
-					return delay_one;
-					break;
-				case ZERO:
-				default:
-					return delay_zero;
-					break;
-			}
-		}
-		int cur_value(){
-			switch (cur_case) {
-				case ONE:
-					return 1;
-				case ZERO:
-				default:
-					return 0;
-			}
-		}
-
-		void swap_case(){
-			switch (cur_case) {
-				case ONE:
-					cur_case = ZERO;
-					break;
-				case ZERO:
-					cur_case = ONE;
-					break;
-			}
-		}
-	};
-
-	uint m_delay;				/// us
 	QElapsedTimer m_time;
+	QElapsedTimer m_global_time;
 	uint m_frequency;			/// Hz
-	uint m_delay_for_freq;
 	bool m_done;
 	gpio::GPIOWork m_gpio;
 	bool m_opened;
@@ -96,9 +82,17 @@ private:
 	qint64 m_max_delay;
 	qint64 m_last_time;
 
-	void one_cycle();
+	float m_timework_ms;
+	float m_freq_meandr;
+
+	send_data::SendData* m_sender;
+
+	sc::StructServo m_last_state;
+
 	void work();
 	qint64 usec_elapsed();
+
+	void check_controls();
 };
 
 #endif // GPIOTHREAD_H

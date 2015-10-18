@@ -41,6 +41,11 @@ StructTelemetry SendData::config_params() const
 	return m_config_params;
 }
 
+StructControls SendData::control_params() const
+{
+	return m_control_params;
+}
+
 void SendData::set_config_params(const StructTelemetry &telem)
 {
 	m_config_params = telem;
@@ -63,10 +68,10 @@ void SendData::push_data(const Vector3i &gyroscope, const Vector3i &acceleromete
 
 
 	StructTelemetry st = m_config_params;
-	st.gyro = gyroscope;
-	st.accel = accelerometer;
-	st.temp = temp;
-	st.tick = time;
+	st.gyroscope.gyro = gyroscope;
+	st.gyroscope.accel = accelerometer;
+	st.gyroscope.temp = temp;
+	st.gyroscope.tick = time;
 
 	m_mutex.lock();
 	m_data_send = st;
@@ -128,6 +133,14 @@ void SendData::run()
 	exec();
 }
 
+static inline bool cmpchrs(const char* d1, const char* d2, int len)
+{
+	bool res = true;
+	for(int i = 0; i < len && d1[i] && d2[i]; i++)
+		res &= (d1[i] == d2[i]);
+	return res;
+}
+
 void SendData::tryParseData(const QByteArray &data, const QHostAddress &host, ushort port)
 {
 	if(data == "START"){
@@ -136,11 +149,28 @@ void SendData::tryParseData(const QByteArray &data, const QHostAddress &host, us
 		m_is_available_data = false;
 		m_send_start = true;
 		qDebug() << "start send to socket" << host << port;
+		return;
 	}
 	if(data == "STOP"){
 		m_send_start = false;
 		m_is_available_data = false;
 		qDebug() << "stop send";
+		return;
 	}
+	char buf[4];
+	if(data.size() >= 4){
+		QDataStream stream(data);
+		stream.readRawData(buf, 4);
+		if(cmpchrs(buf, "CTRL", 4)){
+			read_ctrl(stream);
+		}
+	}
+}
+
+void SendData::read_ctrl(QDataStream &data)
+{
+	m_last_control_params = m_control_params;
+
+	m_control_params.read_from(data);
 }
 

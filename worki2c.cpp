@@ -6,28 +6,30 @@
 #include <QDebug>
 #include <QDateTime>
 
+#include "senddata.h"
+
 const int gaddr = 0x68;
 
 using namespace  sc;
 using namespace vector3_;
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
+  , m_sendData(0)
 {
 	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
 	m_timer.start(5);
-
-	m_sendData = new send_data::SendData;
-	m_sendData->start();
-	m_sendData->moveToThread(m_sendData);
 
 	init();
 }
 
 WorkI2C::~WorkI2C()
 {
-	if(m_sendData){
-		delete m_sendData;
-	}
+
+}
+
+void WorkI2C::set_senser(send_data::SendData *sender)
+{
+	m_sendData = sender;
 }
 
 void WorkI2C::init()
@@ -43,12 +45,12 @@ void WorkI2C::init()
 	if(m_sendData){
 		StructTelemetry telem;
 
-		m_i2cdev.read(0x0d, telem.raw, raw_count);
-		telem.afs_sel = (telem.raw[28 - 0x0d] >> 3) & 0x03;
-		telem.fs_sel = (telem.raw[27 - 0x0d] >> 3) & 0x03;
+		m_i2cdev.read(0x0d, telem.gyroscope.raw, raw_count);
+		telem.gyroscope.afs_sel = (telem.gyroscope.raw[28 - 0x0d] >> 3) & 0x03;
+		telem.gyroscope.fs_sel = (telem.gyroscope.raw[27 - 0x0d] >> 3) & 0x03;
 
-		uchar dlpf_cfg = telem.raw[26 - 0x0d] & 0x3;
-		int smplrt_div = telem.raw[25 - 0x0d];
+		uchar dlpf_cfg = telem.gyroscope.raw[26 - 0x0d] & 0x3;
+		int smplrt_div = telem.gyroscope.raw[25 - 0x0d];
 		int gyr_out_rate;
 
 		switch (dlpf_cfg) {
@@ -63,7 +65,7 @@ void WorkI2C::init()
 
 		double sample_rate_div = gyr_out_rate / (1 + smplrt_div);
 
-		telem.freq =  sample_rate_div;
+		telem.gyroscope.freq =  sample_rate_div;
 
 		m_sendData->set_config_params(telem);
 	}

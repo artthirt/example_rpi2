@@ -8,14 +8,20 @@ cmake_minimum_required(VERSION 2.8)
 find_package(Qt5Core)
 find_package(Qt5Network)
 
-set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
-set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-c++)
+if(BUILD_ARM)
+	set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
+	set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-c++)
+else()
+	set(CMAKE_BUILD_TYPE Debug)
+endif()
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 
 include_directories(. ./submodules/struct_controls)
 
 aux_source_directory(. SRC_LIST)
+aux_source_directory(./submodules/struct_controls SRC_LIST)
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME}  Qt5::Core Qt5::Network)
 
