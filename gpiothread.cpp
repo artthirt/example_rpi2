@@ -307,29 +307,35 @@ void GPIOThread::check_controls()
 
 	const sc::StructServo& servo = m_sender->control_params().servo_ctrl;
 
-	if(servo.trigger_start(m_last_state) && servo.pin > 0){
-		m_opened = true;
+	if(!servo.flag_start || !servo.pin || servo.angle == m_pins_freq[servo.pin].current_angle() == servo.angle)
+		return;
 
-		int pin = servo.pin;
-		m_pins_freq[pin].opened = true;
+	int pin = servo.pin;
+
+	if(m_opened && m_pins_freq[pin].opened && m_pins_freq[pin].desired_angle() == servo.angle &&
+			m_pins_freq[pin].speed_of_change == servo.speed_of_change)
+		return;
+
+	m_opened = true;
+
+	m_pins_freq[pin].opened = true;
+	m_pins_freq[pin].set_desired_impulse(servo.angle);
+
+	m_pins_freq[pin].speed_of_change = servo.speed_of_change;
+
+	if(servo.speed_of_change == 0){
 		m_pins_freq[pin].set_desired_impulse(servo.angle);
-
-		if(servo.speed_of_change == 0){
-			m_pins_freq[pin].set_desired_impulse(servo.angle);
-		}else{
-			m_pins_freq[pin].speed_of_change = servo.speed_of_change;
-		}
-		m_pins_freq[pin].calculate_params();
-
-		if(servo.freq_meandr){
-			float period = 1000. / servo.freq_meandr * usec_in_msec;
-			m_pins_freq[pin].period = period;
-		}
-		if(servo.timework_ms){
-			m_pins_freq[pin].timework_ms = servo.timework_ms;
-		}
-		m_pins_freq[pin].time_start_ms = m_global_time.elapsed();
 	}
-	m_last_state = m_sender->control_params().servo_ctrl;
+
+	m_pins_freq[pin].calculate_params();
+
+	if(servo.freq_meandr){
+		float period = 1000. / servo.freq_meandr * usec_in_msec;
+		m_pins_freq[pin].period = period;
+	}
+	if(servo.timework_ms){
+		m_pins_freq[pin].timework_ms = servo.timework_ms;
+	}
+	m_pins_freq[pin].time_start_ms = m_global_time.elapsed();
 }
 

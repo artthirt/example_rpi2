@@ -87,8 +87,6 @@ private:
 
 	send_data::SendData* m_sender;
 
-	sc::StructServo m_last_state;
-
 	void work();
 	qint64 usec_elapsed();
 
