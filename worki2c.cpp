@@ -8,16 +8,45 @@
 
 #include "senddata.h"
 
-const int gaddr = 0x68;
-
 using namespace  sc;
 using namespace vector3_;
 
+const uchar addr_mpu6050 = 0x68;
+const uchar addr_hmp5883 = 0x1E;
+const uchar addr_bmp180 = 0x77;
+
+const uchar confRegA_hmc5883 = 0x00;
+const uchar confRegB_hmc5883 = 0x01;
+const uchar confRegM_hmc5883 = 0x02;
+
+const int freq_gyroAndCompass = 100;
+const int period_gyroAndCompass = 1000/freq_gyroAndCompass;
+
+const int freq_baro = 10;
+const int period_baro = 1000/freq_baro;
+
+const int default_interval_ms_barometer_read = 30;
+const uchar oss_bmp180 = 1;
+
+///////////////////////////////////////////////
+
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
   , m_sendData(0)
+  , m_regA_hmc5883(0)
+  , m_pressure_received(false)
 {
-	connect(&m_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
-	m_timer.start(5);
+	connect(&m_timer_mpu6050, SIGNAL(timeout()), this, SLOT(on_timeout_mpu6050()));
+	m_timer_mpu6050.start(period_gyroAndCompass);
+
+	connect(&m_timer_hmc5883, SIGNAL(timeout()), this, SLOT(on_timeout_hmc5883()));
+	m_timer_hmc5883.start(period_gyroAndCompass);
+
+	connect(&m_timer_bmp180, SIGNAL(timeout()), this, SLOT(on_timeout_bmp180()));
+	m_timer_bmp180.start(period_baro);
+
+	connect(&m_timer_bmp180_read, SIGNAL(timeout()), this, SLOT(on_timeout_bmp180_read()));
+	m_timer_bmp180_read.setInterval(default_interval_ms_barometer_read);
+	m_timer_bmp180_read.setSingleShot(true);
 
 	init();
 }
@@ -34,23 +63,131 @@ void WorkI2C::set_senser(send_data::SendData *sender)
 
 void WorkI2C::init()
 {
-	if(!m_i2cdev.open(0x68)){
-		std::cout << "device not open\n";
+	init_mpu6050();
+	init_hmc5883();
+	init_bmp180();
+}
+
+void WorkI2C::on_timeout_mpu6050()
+{
+	if(!m_i2cMpu6050.is_opened())
 		return;
+
+	uchar txbuf[10] = {0};
+
+	int res;
+
+	u_short data_out[7];
+	short data[7];
+
+	txbuf[0] = 0x3b;
+	m_mutex.lock();
+	res = m_i2cMpu6050.read(0x3b, reinterpret_cast<u_char *>(data_out), 14);
+	m_mutex.unlock();
+
+	qint64 tick = QDateTime::currentMSecsSinceEpoch();
+
+	for(int i = 0; i < 7/*data_out.size()*/; i++){
+		data[i] = static_cast<short>((data_out[i] << 8) | (data_out[i] >> 8));
 	}
-	std::cout << "device opened\n";
-	u_char data[2] = { 0 };
-	m_i2cdev.write(0x6B, data, 1);
 
 	if(m_sendData){
-		StructTelemetry telem;
+		m_sendData->set_gyroscope(Vector3i(data[4], data[5], data[6]),
+				Vector3i(data[0], data[1], data[2]),
+				data[3] / 340.f + 36.53f, tick);
+	}
+}
 
-		m_i2cdev.read(0x0d, telem.gyroscope.raw, raw_count);
-		telem.gyroscope.afs_sel = (telem.gyroscope.raw[28 - 0x0d] >> 3) & 0x03;
-		telem.gyroscope.fs_sel = (telem.gyroscope.raw[27 - 0x0d] >> 3) & 0x03;
+void WorkI2C::on_timeout_hmc5883()
+{
+	if(!m_i2cHmc5883.is_opened())
+		return;
+	int res = 0;
+	ushort data_out[3] = { 0 };
+	short data[3] = { 0 };
+	uchar addr_data_hmc5883 = 0x03;
 
-		uchar dlpf_cfg = telem.gyroscope.raw[26 - 0x0d] & 0x3;
-		int smplrt_div = telem.gyroscope.raw[25 - 0x0d];
+	m_mutex.lock();
+	res = m_i2cHmc5883.read(addr_data_hmc5883, reinterpret_cast<u_char *>(data_out), sizeof(data_out));
+	m_mutex.unlock();
+
+//	qDebug() << "compass raw" << (int)m_i2cHmc5883.addr() << data_out[0] << data_out[1] << data_out[2] << res;
+
+	qint64 tick = QDateTime::currentMSecsSinceEpoch();
+
+	if(res <= 0)
+		return;
+
+	for(int i = 0; i < 3; i++){
+		data[i] = static_cast<short>((data_out[i] << 8) | (data_out[i] >> 8));
+	}
+
+	if(m_sendData){
+		m_sendData->set_compass(Vector3i(data[0], data[1], data[2]),
+				m_regA_hmc5883, tick);
+	}
+}
+
+void WorkI2C::on_timeout_bmp180()
+{
+	if(!m_i2cBmp180.is_opened() || m_pressure_received)
+		return;
+
+	uchar addr_reg = 0xf4;
+
+	uchar val_reg = 0x34 + (oss_bmp180 << 6);
+
+	m_mutex.lock();
+	m_i2cBmp180.write(addr_reg, &val_reg, 1);
+	m_mutex.unlock();
+
+	m_timer_bmp180_read.start();
+	m_pressure_received= true;
+}
+
+void WorkI2C::on_timeout_bmp180_read()
+{
+	uchar addr_read = 0xf6;
+
+	uchar data[3];
+
+	m_mutex.lock();
+	int res = m_i2cBmp180.read(addr_read, data, sizeof(data));
+	m_mutex.unlock();
+
+	qint64 tick = QDateTime::currentMSecsSinceEpoch();
+
+	if(res <= 0)
+		return;
+
+	int pressure = ((data[0] << 16) + (data[1] << 8) + data[2]) >> (8 - oss_bmp180);
+
+	if(m_sendData){
+		m_sendData->set_barometer(pressure, tick);
+	}
+
+	m_pressure_received = false;
+}
+
+void WorkI2C::init_mpu6050()
+{
+	if(!m_i2cMpu6050.open(addr_mpu6050)){
+		std::cout << "mpu6050: device not open\n";
+		return;
+	}
+	std::cout << "mpu6050: device opened\n";
+	u_char data[2] = { 0 };
+	m_i2cMpu6050.write(0x6B, data, 1);
+
+	if(m_sendData){
+		StructGyroscope gyroscope;
+
+		m_i2cMpu6050.read(0x0d, gyroscope.raw, raw_count);
+		gyroscope.afs_sel = (gyroscope.raw[28 - 0x0d] >> 3) & 0x03;
+		gyroscope.fs_sel = (gyroscope.raw[27 - 0x0d] >> 3) & 0x03;
+
+		uchar dlpf_cfg = gyroscope.raw[26 - 0x0d] & 0x3;
+		int smplrt_div = gyroscope.raw[25 - 0x0d];
 		int gyr_out_rate;
 
 		switch (dlpf_cfg) {
@@ -65,56 +202,63 @@ void WorkI2C::init()
 
 		double sample_rate_div = gyr_out_rate / (1 + smplrt_div);
 
-		telem.gyroscope.freq =  sample_rate_div;
+		gyroscope.freq =  sample_rate_div;
 
-		m_sendData->set_config_params(telem);
+		m_sendData->set_config_gyroscope(gyroscope);
 	}
 }
 
-void WorkI2C::on_timeout()
+void WorkI2C::init_hmc5883()
 {
-	if(!m_i2cdev.is_opened())
+	if(!m_i2cHmc5883.open(addr_hmp5883)){
+		std::cout << "hmp5883l: device not open\n";
 		return;
-
-	uchar txbuf[10] = {0};
-
-	int res;
-
-	u_short data_in[7];
-	short data[7];
-
-	txbuf[0] = 0x3b;
-	res = m_i2cdev.read(0x3b, reinterpret_cast<u_char *>(data_in), 14);
-
-	qint64 tick = QDateTime::currentMSecsSinceEpoch();
-
-//	QString str;
-	for(int i = 0; i < 7/*data_out.size()*/; i++){
-		data[i] = static_cast<short>((data_in[i] << 8) | (data_in[i] >> 8));
-//		str += QString::number(data[i]) + "; ";
 	}
-//	for(int i = 0; i < 7/*data_out.size()*/; i++){
-//		short val = 0;
-//		txbuf[0] = 0x3b + 2 * i;
-//		res = write(m_i2cdev, txbuf, 1);
-//		res = read(m_i2cdev, rxbuf, 1);
-//		val = (rxbuf[0] << 8);
+	std::cout << "hmc5883: device opened\n";
 
-//		txbuf[0] = 0x3b + 2 * i + 1;
-//		res = write(m_i2cdev, txbuf, 1);
-//		res = read(m_i2cdev, rxbuf, 1);
-//		val |= rxbuf[0];
-//		ss << (int)val << "; ";
-//		data[i] = val;
-//	}
+	const uchar ma10 = 0x2;		/// 4 samples averages per measurement output;
+	const uchar do210 = 0x6;	/// mode of output rate (0x6 === 75Hz)
+	const uchar ms10 = 0;		/// measurement mode (0 === normal)
 
-//	qDebug() << str;
-//	std::cout << ss.str() << std::endl;
+	m_regA_hmc5883 =  (ma10 << 5) | (do210 << 2) | (ms10);
 
-	if(m_sendData){
-		m_sendData->push_data(Vector3i(data[4], data[5], data[6]),
-				Vector3i(data[0], data[1], data[2]),
-				data[3] / 340.f + 36.53f, tick);
+	m_i2cHmc5883.write(confRegA_hmc5883, &m_regA_hmc5883, 1);
+
+	uchar config_regB = 0xa0;//0x1;	/// 1.3 Ga (default)
+
+	m_i2cHmc5883.write(confRegB_hmc5883, &config_regB, 1);
+
+	uchar mode = 0x0;			/// continuous mode
+
+	m_i2cHmc5883.write(confRegM_hmc5883, &mode, 1);
+}
+
+void WorkI2C::init_bmp180()
+{
+	if(!m_i2cBmp180.open(addr_bmp180)){
+		std::cout << "bmp180: device not open\n";
+		return;
+	}
+	std::cout << "bmp180: device opened\n";
+
+	switch (oss_bmp180) {
+		case 0:
+		default:
+			m_timer_bmp180.setInterval(6);
+			m_timer_bmp180_read.setInterval(5);
+			break;
+		case 1:
+			m_timer_bmp180.setInterval(9);
+			m_timer_bmp180_read.setInterval(8);
+			break;
+		case 2:
+			m_timer_bmp180.setInterval(15);
+			m_timer_bmp180_read.setInterval(14);
+			break;
+		case 3:
+			m_timer_bmp180.setInterval(27);
+			m_timer_bmp180_read.setInterval(26);
+			break;
 	}
 }
 

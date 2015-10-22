@@ -36,9 +36,9 @@ SendData::~SendData()
 	}
 }
 
-StructTelemetry SendData::config_params() const
+StructGyroscope SendData::config_gyroscope() const
 {
-	return m_config_params;
+	return m_config_gyroscope;
 }
 
 StructControls SendData::control_params() const
@@ -46,9 +46,9 @@ StructControls SendData::control_params() const
 	return m_control_params;
 }
 
-void SendData::set_config_params(const StructTelemetry &telem)
+void SendData::set_config_gyroscope(const StructGyroscope &telem)
 {
-	m_config_params = telem;
+	m_config_gyroscope = telem;
 }
 
 void SendData::setDelay(int delay)
@@ -61,20 +61,48 @@ void SendData::set_port_receiver(ushort port)
 
 }
 
-void SendData::push_data(const Vector3i &gyroscope, const Vector3i &accelerometer, float temp, qint64 time)
+void SendData::set_gyroscope(const Vector3i &gyroscope, const Vector3i &accelerometer, float temp, qint64 time)
 {
 	if(!m_send_start)
 		return;
 
-
-	StructTelemetry st = m_config_params;
-	st.gyroscope.gyro = gyroscope;
-	st.gyroscope.accel = accelerometer;
-	st.gyroscope.temp = temp;
-	st.gyroscope.tick = time;
+	StructGyroscope st;
+	st = m_config_gyroscope;
+	st.gyro = gyroscope;
+	st.accel = accelerometer;
+	st.temp = temp;
+	st.tick = time;
 
 	m_mutex.lock();
-	m_data_send = st;
+	m_data_send.gyroscope = st;
+	m_is_available_data = true;
+	m_mutex.unlock();
+}
+
+void SendData::set_compass(const Vector3i &compass, uchar mode, qint64 time)
+{
+//	qDebug() << "compass" << compass;
+
+	if(!m_send_start)
+		return;
+
+	m_mutex.lock();
+	m_data_send.compass.data = compass;
+	m_data_send.compass.mode = mode;
+	m_data_send.compass.tick = time;
+	m_is_available_data = true;
+	m_mutex.unlock();
+}
+
+void SendData::set_barometer(int data, qint64 time)
+{
+//	qDebug() << "pressure" << data;
+	if(!m_send_start)
+		return;
+
+	m_mutex.lock();
+	m_data_send.barometer.data = data;
+	m_data_send.barometer.tick = time;
 	m_is_available_data = true;
 	m_mutex.unlock();
 }
@@ -104,6 +132,7 @@ void SendData::on_timeout()
 		m_mutex.lock();
 		m_data_send.write_to(stream);
 		m_is_available_data = false;
+
 		m_mutex.unlock();
 
 		m_socket->writeDatagram(data, m_host_sender, m_port_sender);
