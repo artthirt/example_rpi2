@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QMutex>
+#include <QTime>
 
 #include "struct_controls.h"
 #include "i2cdevice.h"
@@ -29,14 +30,23 @@ public slots:
 	void on_timeout_mpu6050();
 	void on_timeout_hmc5883();
 	void on_timeout_bmp180();
-	void on_timeout_bmp180_read();
 
 private:
 	QTimer m_timer_mpu6050;
 	QTimer m_timer_hmc5883;
 	QTimer m_timer_bmp180;
-	QTimer m_timer_bmp180_read;
-	QMutex m_mutex;
+
+	enum BAROSTATE{
+		NULLSTATE		= 0,
+		SETTEMP			= 1,
+		GETTEMP			= 2,
+		GETPRESSURE		= 3,
+		SETPRESSURE		= 4
+	};
+	BAROSTATE m_baroState;
+	int m_baro_interval;
+	QTime m_baroTime;
+	int m_baro_time_set;
 
 	send_data::SendData* m_sendData;
 
@@ -46,11 +56,15 @@ private:
 
 	uchar m_regA_hmc5883;
 
-	bool m_pressure_received;
-
 	void init_mpu6050();
 	void init_hmc5883();
 	void init_bmp180();
+
+	void write_baro_get_pressure();
+	void read_baro_get_pressure();
+
+	void write_baro_get_temp();
+	void read_baro_get_temp();
 };
 
 #endif // WORKI2C_H

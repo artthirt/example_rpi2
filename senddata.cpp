@@ -107,6 +107,13 @@ void SendData::set_barometer(int data, qint64 time)
 	m_mutex.unlock();
 }
 
+void SendData::set_temperature(int temp)
+{
+	m_mutex.lock();
+	m_data_send.barometer.temp = temp;
+	m_mutex.unlock();
+}
+
 void SendData::on_readyRead()
 {
 	QByteArray data;

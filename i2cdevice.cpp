@@ -15,6 +15,7 @@ Device::Device()
 {
 	m_ref = 0;
 	m_dev = 0;
+	m_opened = false;
 }
 
 Device::Device(const std::string& sdev)
@@ -46,9 +47,11 @@ bool Device::open()
 	if(m_dev != -1){
 		addRef();
 		std::cout << "device '" << m_name << "' open. ref="<< m_ref << " dev=" << m_dev <<  std::endl;
+		m_opened = true;
 		return true;
 	}
 	m_dev = 0;
+	m_opened = false;
 
 	return false;
 }
@@ -65,6 +68,7 @@ void Device::close()
 		std::cout << "device '" << m_name << "' closed" << std::endl;
 		m_ref = 0;
 		m_dev = 0;
+		m_opened = false;
 	}
 }
 
@@ -105,6 +109,11 @@ int Device::read(unsigned char addr, unsigned char *data, int len)
 	if(res >= 0)
 		res = ::read(m_dev, data, len);
 	return res;
+}
+
+bool Device::is_opened() const
+{
+	return m_opened;
 }
 
 std::string Device::name() const
@@ -188,7 +197,7 @@ bool I2CDevice::open(u_char addr, bool tenbits)
 	u_char res = 0;
 	res = m_i2cdev->set_param(I2C_TENBIT, tenbits);
 
-	return true;
+	return m_i2cdev->is_opened();
 }
 
 void I2CDevice::close()

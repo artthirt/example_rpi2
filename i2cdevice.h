@@ -19,11 +19,13 @@ public:
 	int set_param(int param, int value);
 	int write(unsigned char addr, unsigned char* data, int len);
 	int read(unsigned char addr, unsigned char* data, int len);
+	bool is_opened() const;
 	std::string name() const;
 private:
 	int m_ref;
 	std::string m_name;
 	std::vector< u_char > m_write_data;
+	bool m_opened;
 
 	mutable int m_dev;
 

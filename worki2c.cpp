@@ -22,18 +22,29 @@ const uchar confRegM_hmc5883 = 0x02;
 const int freq_gyroAndCompass = 100;
 const int period_gyroAndCompass = 1000/freq_gyroAndCompass;
 
-const int freq_baro = 10;
+const int freq_baro = 500;
 const int period_baro = 1000/freq_baro;
 
 const int default_interval_ms_barometer_read = 30;
-const uchar oss_bmp180 = 1;
+const uchar oss_bmp180 = 2;
+
+namespace barotimeset{
+	const int temp = 5;
+	const int pressure_oss0 = 5;
+	const int pressure_oss1 = 8;
+	const int pressure_oss2 = 14;
+	const int pressure_oss3 = 26;
+	int pressure_ossN = pressure_oss0;
+}
 
 ///////////////////////////////////////////////
 
 WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
   , m_sendData(0)
   , m_regA_hmc5883(0)
-  , m_pressure_received(false)
+  , m_baroState(NULLSTATE),
+	m_baro_interval(0)
+  , m_baro_time_set(0)
 {
 	connect(&m_timer_mpu6050, SIGNAL(timeout()), this, SLOT(on_timeout_mpu6050()));
 	m_timer_mpu6050.start(period_gyroAndCompass);
@@ -43,10 +54,6 @@ WorkI2C::WorkI2C(QObject *parent) : QObject(parent)
 
 	connect(&m_timer_bmp180, SIGNAL(timeout()), this, SLOT(on_timeout_bmp180()));
 	m_timer_bmp180.start(period_baro);
-
-	connect(&m_timer_bmp180_read, SIGNAL(timeout()), this, SLOT(on_timeout_bmp180_read()));
-	m_timer_bmp180_read.setInterval(default_interval_ms_barometer_read);
-	m_timer_bmp180_read.setSingleShot(true);
 
 	init();
 }
@@ -81,9 +88,7 @@ void WorkI2C::on_timeout_mpu6050()
 	short data[7];
 
 	txbuf[0] = 0x3b;
-	m_mutex.lock();
 	res = m_i2cMpu6050.read(0x3b, reinterpret_cast<u_char *>(data_out), 14);
-	m_mutex.unlock();
 
 	qint64 tick = QDateTime::currentMSecsSinceEpoch();
 
@@ -103,13 +108,11 @@ void WorkI2C::on_timeout_hmc5883()
 	if(!m_i2cHmc5883.is_opened())
 		return;
 	int res = 0;
-	ushort data_out[3] = { 0 };
+	uchar data_out[6] = { 0 };
 	short data[3] = { 0 };
 	uchar addr_data_hmc5883 = 0x03;
 
-	m_mutex.lock();
-	res = m_i2cHmc5883.read(addr_data_hmc5883, reinterpret_cast<u_char *>(data_out), sizeof(data_out));
-	m_mutex.unlock();
+	res = m_i2cHmc5883.read(addr_data_hmc5883, data_out, sizeof(data_out));
 
 //	qDebug() << "compass raw" << (int)m_i2cHmc5883.addr() << data_out[0] << data_out[1] << data_out[2] << res;
 
@@ -119,41 +122,95 @@ void WorkI2C::on_timeout_hmc5883()
 		return;
 
 	for(int i = 0; i < 3; i++){
-		data[i] = static_cast<short>((data_out[i] << 8) | (data_out[i] >> 8));
+		data[i] = (data_out[(i << 1)] << 8) | (data_out[(i << 1) + 1]);
 	}
 
+	Vector3i out(data[0], data[2], data[1]);
+
+	double d = out.x() * out.x() + out.y() * out.y();
+
+	qDebug() << out << sqrt(d);
+
 	if(m_sendData){
-		m_sendData->set_compass(Vector3i(data[0], data[1], data[2]),
-				m_regA_hmc5883, tick);
+		m_sendData->set_compass(out, m_regA_hmc5883, tick);
 	}
 }
 
 void WorkI2C::on_timeout_bmp180()
 {
-	if(!m_i2cBmp180.is_opened() || m_pressure_received)
+	if(!m_i2cBmp180.is_opened())
 		return;
 
+	if(m_baroTime.elapsed() > m_baro_time_set + m_baro_interval){
+		switch (m_baroState) {
+			case NULLSTATE:
+			case SETTEMP:
+				write_baro_get_temp();
+				m_baroState = GETTEMP;
+				m_baro_interval = barotimeset::temp;
+				break;
+			case GETTEMP:
+				read_baro_get_temp();
+				m_baroState = SETPRESSURE;
+				m_baro_interval = 0;
+			case SETPRESSURE:
+				write_baro_get_pressure();
+				m_baroState = GETPRESSURE;
+				m_baro_interval = barotimeset::pressure_ossN;
+				break;
+			case GETPRESSURE:
+				read_baro_get_pressure();
+				m_baroState = SETTEMP;
+				m_baro_interval = 0;
+				break;
+			default:
+				break;
+		}
+		//qDebug() << m_baroState << m_baro_interval;
+		m_baro_time_set = m_baroTime.elapsed();
+	}
+
+}
+
+void WorkI2C::write_baro_get_temp()
+{
+	uchar addr_reg = 0xf4;
+	uchar val_reg = 0x2e;
+	m_i2cBmp180.write(addr_reg, &val_reg, 1);
+
+}
+
+void WorkI2C::read_baro_get_temp()
+{
+	uchar data[2];
+	uchar addr_reg = 0xf6;
+	m_i2cBmp180.read(addr_reg, data, 2);
+	int utemp = (data[0] << 8) | data[1];
+
+	//qDebug() << utemp;
+
+	if(m_sendData){
+		m_sendData->set_temperature(utemp);
+	}
+
+}
+
+void WorkI2C::write_baro_get_pressure()
+{
 	uchar addr_reg = 0xf4;
 
 	uchar val_reg = 0x34 + (oss_bmp180 << 6);
 
-	m_mutex.lock();
 	m_i2cBmp180.write(addr_reg, &val_reg, 1);
-	m_mutex.unlock();
-
-	m_timer_bmp180_read.start();
-	m_pressure_received= true;
 }
 
-void WorkI2C::on_timeout_bmp180_read()
+void WorkI2C::read_baro_get_pressure()
 {
 	uchar addr_read = 0xf6;
 
 	uchar data[3];
 
-	m_mutex.lock();
 	int res = m_i2cBmp180.read(addr_read, data, sizeof(data));
-	m_mutex.unlock();
 
 	qint64 tick = QDateTime::currentMSecsSinceEpoch();
 
@@ -165,8 +222,6 @@ void WorkI2C::on_timeout_bmp180_read()
 	if(m_sendData){
 		m_sendData->set_barometer(pressure, tick);
 	}
-
-	m_pressure_received = false;
 }
 
 void WorkI2C::init_mpu6050()
@@ -216,7 +271,7 @@ void WorkI2C::init_hmc5883()
 	}
 	std::cout << "hmc5883: device opened\n";
 
-	const uchar ma10 = 0x2;		/// 4 samples averages per measurement output;
+	const uchar ma10 = 0x3;		/// 4 samples averages per measurement output;
 	const uchar do210 = 0x6;	/// mode of output rate (0x6 === 75Hz)
 	const uchar ms10 = 0;		/// measurement mode (0 === normal)
 
@@ -224,7 +279,7 @@ void WorkI2C::init_hmc5883()
 
 	m_i2cHmc5883.write(confRegA_hmc5883, &m_regA_hmc5883, 1);
 
-	uchar config_regB = 0xa0;//0x1;	/// 1.3 Ga (default)
+	uchar config_regB = 0x1 << 5;//	/// 1.3 Ga (default)
 
 	m_i2cHmc5883.write(confRegB_hmc5883, &config_regB, 1);
 
@@ -244,21 +299,22 @@ void WorkI2C::init_bmp180()
 	switch (oss_bmp180) {
 		case 0:
 		default:
-			m_timer_bmp180.setInterval(6);
-			m_timer_bmp180_read.setInterval(5);
+			barotimeset::pressure_ossN = barotimeset::pressure_oss0;
 			break;
 		case 1:
-			m_timer_bmp180.setInterval(9);
-			m_timer_bmp180_read.setInterval(8);
+			barotimeset::pressure_ossN = barotimeset::pressure_oss1;
 			break;
 		case 2:
-			m_timer_bmp180.setInterval(15);
-			m_timer_bmp180_read.setInterval(14);
+			barotimeset::pressure_ossN = barotimeset::pressure_oss2;
 			break;
 		case 3:
-			m_timer_bmp180.setInterval(27);
-			m_timer_bmp180_read.setInterval(26);
+			barotimeset::pressure_ossN = barotimeset::pressure_oss3;
 			break;
 	}
+	m_timer_bmp180.setInterval(barotimeset::pressure_ossN);
+
+	m_baroState = SETTEMP;
+	m_baroTime.start();
+	m_baro_time_set = m_baroTime.elapsed();
 }
 

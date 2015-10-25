@@ -34,6 +34,7 @@ public:
 	void set_gyroscope(const vector3_::Vector3i& gyroscope, const vector3_::Vector3i& accelerometer, float temp, qint64 time);
 	void set_compass(const vector3_::Vector3i& compass, uchar mode, qint64 time);
 	void set_barometer(int data, qint64 time);
+	void set_temperature(int temp);
 
 signals:
 	void send_set_interval(int);
