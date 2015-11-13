@@ -126,10 +126,11 @@ void WorkI2C::on_timeout_hmc5883()
 	}
 
 	Vector3i out(data[0], data[2], data[1]);
+	//out += Vector3i(-80, 150, -410);
 
-	double d = out.x() * out.x() + out.y() * out.y();
+//	double d = out.x() * out.x() + out.y() * out.y();
 
-	qDebug() << out << sqrt(d);
+//	qDebug() << out << sqrt(d);
 
 	if(m_sendData){
 		m_sendData->set_compass(out, m_regA_hmc5883, tick);
