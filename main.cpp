@@ -198,24 +198,6 @@ int main(int argc, char *argv[])
 
 	QThreadPool::globalInstance()->start(thread);
 
-
-	QString sval = "1.5";
-	QString sfreq = "50";
-	if(argc > 1){
-		sval= argv[1];
-	}
-	if(argc > 2){
-		sfreq = argv[2];
-	}
-	std::cout << "impulse = " << sval.toStdString() << "; freq = " << sfreq.toStdString() << "\n";
-
-	float freq = sfreq.toFloat();
-	if(!freq)
-		freq = 50;
-
-	float delay_one = sval.toFloat();
-	thread->open_pin(15, delay_one, freq);
-
 	app.exec();
 
 	return 0;
